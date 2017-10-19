@@ -5,11 +5,11 @@ function FuzzyMesh(params) {
     hairLength: 4,
     hairRadialSegments: 4,
     hairHeightSegments: 16,
-    hairBase: 0.25,
+    hairBase: 0.05,
     minFlex: 0.8,
     maxFlex: 1.2,
     fuzz: 0.5,
-    gravity: 1.0,
+    gravity: 2.0,
     centrifugalForceFactor: 2.0,
     movementForceFactor: 0.75,
     movementDecay: 0.7,
@@ -44,11 +44,6 @@ function FuzzyMesh(params) {
   });
 
   // bake normal based rotations into the position buffer
-  const up = new THREE.Vector3(0, 1, 0);
-  const normal = new THREE.Vector3();
-  const position = new THREE.Vector3();
-  const quat = new THREE.Quaternion();
-  const positionBuffer = geometry.attributes.position.array;
   const baseDirectionBuffer = geometry.createAttribute('baseDirection', 3).array;
 
   let directions;
@@ -71,40 +66,31 @@ function FuzzyMesh(params) {
     directions = positions;
   }
 
+  const normal = new THREE.Vector3();
+
   for (let i = 0, offset = 0; i < positions.length; i++) {
     normal.copy(directions[i]);
     normal.x += THREE.Math.randFloatSpread(config.fuzz);
     normal.y += THREE.Math.randFloatSpread(config.fuzz);
     normal.z += THREE.Math.randFloatSpread(config.fuzz);
     normal.normalize();
-    quat.setFromUnitVectors(up, normal);
 
     for (let j = 0; j < geometry.prefabVertexCount; j++, offset += 3) {
-      position.copy(prefab.vertices[j]);
-      position.applyQuaternion(quat);
-
-      // positionBuffer[offset    ] = position.x;
-      // positionBuffer[offset + 1] = position.y;
-      // positionBuffer[offset + 2] = position.z;
-
       baseDirectionBuffer[offset    ] = normal.x;
       baseDirectionBuffer[offset + 1] = normal.y;
       baseDirectionBuffer[offset + 2] = normal.z;
     }
   }
 
-  console.log(config.hairLength / config.hairHeightSegments)
-
   const material = new BAS.StandardAnimationMaterial({
     flatShading: true,
-    // wireframe: true,
+    wireframe: false,
     uniformValues: {
       metalness: 0.5,
       roughness: 1.0
     },
     uniforms: {
       hairLength: {value: config.hairLength},
-      heightStepSize: {value: config.hairLength / config.hairHeightSegments},
       settleTime: {value: 0.0},
       settleScale: {value: 1.0},
       globalForce: {value: new THREE.Vector3(0.0, -config.gravity, 0.0)},
@@ -112,8 +98,14 @@ function FuzzyMesh(params) {
       centrifugalForce: {value: 0.0},
       centrifugalAxis: {value: new THREE.Vector3()}
     },
+    defines: {
+      'HAIR_LENGTH': (config.hairLength).toFixed(2),
+      'SEGMENT_STEP': (config.hairLength / config.hairHeightSegments).toFixed(2),
+      'FORCE_STEP': (1.0 / config.hairLength).toFixed(2)
+    },
     vertexParameters: `
       uniform float hairLength;
+      uniform float heightSteps;
       uniform float heightStepSize;
 
       uniform vec3 globalForce;
@@ -161,38 +153,54 @@ function FuzzyMesh(params) {
       `
     ],
     vertexPosition: `
-      float l = position.y;
-      float frc = l / hairLength;
-
-      // frc = (frc) * 0.5;
+      // float l = position.y;
+      // float frc = l / hairLength;
+      // vec3 totalForce = globalForce * flex;
+      // totalForce *= 0.95 + 0.05 - (sin(settleTime + settleOffset) * 0.05 * settleScale);
+      // totalForce += baseDirection * centrifugalAxis * centrifugalForce;
+      // vec3 from = baseDirection;
+      // vec3 to = normalize(baseDirection + totalForce * frc);
+      // vec4 quat = quatFromUnitVectors(UP, to);
+      // transformed = rotateVector(quat, transformed);
 
       vec3 totalForce = globalForce * flex;
-
       totalForce *= 0.95 + 0.05 - (sin(settleTime + settleOffset) * 0.05 * settleScale);
       totalForce += baseDirection * centrifugalAxis * centrifugalForce;
+      
 
-      vec3 from = baseDirection;
-      vec3 to = normalize(baseDirection + totalForce * frc);
-      
-      vec4 quat = quatFromUnitVectors(UP, to);
-      transformed = rotateVector(quat, transformed);
-      
+      vec3 result;
+
+      vec3 to = normalize(baseDirection + totalForce * position.y / HAIR_LENGTH);
+      vec4 q = quatFromUnitVectors(UP, to);
+      vec3 v = vec3(position.x, 0.0, position.z);
+
+      result += rotateVector(q, v);
+
+      for (float i = 0.0; i < HAIR_LENGTH; i += SEGMENT_STEP) {
+        if (position.y <= i) break;
+
+        vec3 to = normalize(baseDirection + totalForce * i * FORCE_STEP);
+        vec4 q = quatFromUnitVectors(UP, to);
+        vec3 v = vec3(0.0, SEGMENT_STEP, 0.0);
+
+        result += rotateVector(q, v);
+      }
+
+      transformed = result;
       transformed += hairPosition;
     `
   });
 
-  // might be possible to do smooth shading
-  // geometry.computeVertexNormals();
+  // console.log(material.defines)
 
   THREE.Mesh.call(this, geometry, material);
   this.frustumCulled = false;
-
 
   const base = new THREE.Mesh(
     params.model,
     new THREE.MeshStandardMaterial({
       roughness: 1.0,
-      wireframe: true,
+      // wireframe: true,
       // flatShading: true,
     })
   );
@@ -322,12 +330,14 @@ root.add(light2);
 
 root.add(new THREE.AmbientLight(colors.purple));
 
+root.add(new THREE.AxisHelper(10));
+
 new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639/plus.json', (model) => {
   // test shapes, try different ones :D
-  model = new THREE.SphereGeometry(4, 16, 16);
+  // model = new THREE.SphereGeometry(4, 256, 128);
   // model = new THREE.PlaneGeometry(16, 16, 2, 2);
   // model = new THREE.CylinderGeometry(2, 2, 8, 128, 64, true);
-  // model = new THREE.TorusGeometry(8, 1, 128, 512);
+  model = new THREE.TorusGeometry(8, 1, 128, 512);
   // model = new THREE.TorusKnotGeometry(2, 0.1, 64, 64, 3, 5);
 
 
@@ -336,7 +346,7 @@ new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639
 
 
 
-  // const g = new THREE.SphereGeometry(2, 12, 12);
+  // const g = new THREE.SphereGeometry(1, 12, 12);
   // const m = new THREE.MeshBasicMaterial({
   //   color: 0xff0000,
   //   wireframe: true,
@@ -352,12 +362,7 @@ new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639
 
   const fuzzy = new FuzzyMesh({
     model: model,
-    config: {
-      // hairBase: 0.05,
-      // hairLength: 2.0,
-      // hairHeightSegments: 2,
-      // fuzz: 0.5,
-    }
+    config: {}
   });
   root.add(fuzzy);
   root.addUpdateCallback(() => {
@@ -366,36 +371,36 @@ new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639
 
 
 
-  // const axes = ['x', 'y', 'z'];
-  // const p = new THREE.Vector3();
-  // const tl = new TimelineMax({
-  //   repeat: -1,
-  //   delay: 1,
-  //   repeatDelay: 0.5,
-  //   onRepeat: () => {
-  //     fuzzy.angle = 0;
-  //   fuzzy.setRotationAxis(axes[Math.random() * 3 | 0]);
-  //   },
-  //   onUpdate: () => {
-  //     fuzzy.pos = p;
-  //   }
-  // });
-  //
-  // tl.to(p, 0.5, {y: 8, ease: Power2.easeOut});
-  // tl.to(p, 0.5, {y: 0, ease: Power2.easeIn});
-  // tl.to(p, 0.1, {y: -2, ease: Power2.easeOut});
-  // tl.to(p, 0.5, {y: 0, ease: Power2.easeOut});
-  // tl.fromTo(fuzzy, 1.0, {angle: 0}, {angle: Math.PI * 2 * (Math.random() > 0.5 ? 1 : -1), ease: Power1.easeInOut}, 0);
+  const axes = ['x', 'y', 'z'];
+  const p = new THREE.Vector3();
+  const tl = new TimelineMax({
+    repeat: -1,
+    delay: 1,
+    repeatDelay: 0.5,
+    onRepeat: () => {
+      fuzzy.angle = 0;
+    fuzzy.setRotationAxis(axes[Math.random() * 3 | 0]);
+    },
+    onUpdate: () => {
+      fuzzy.pos = p;
+    }
+  });
+
+  tl.to(p, 0.5, {y: 16, ease: Power2.easeOut});
+  tl.to(p, 0.5, {y: 0, ease: Power2.easeIn});
+  tl.to(p, 0.1, {y: -4, ease: Power2.easeOut});
+  tl.to(p, 0.5, {y: 0, ease: Power2.easeOut});
+  tl.fromTo(fuzzy, 1.0, {angle: 0}, {angle: Math.PI * 2 * (Math.random() > 0.5 ? 1 : -1), ease: Power1.easeInOut}, 0);
 
 
 
 
-  fuzzy.setRotationAxis('x');
-  const position = new THREE.Vector3();
-  const tl = new TimelineMax({repeat: -1, yoyo: true, repeatDelay: 0});
+  // fuzzy.setRotationAxis('x');
+  // const position = new THREE.Vector3();
+  // const tl = new TimelineMax({repeat: -1, yoyo: true, repeatDelay: 0});
   // tl.fromTo(position, 2, {x: -6}, {x: 6, ease: Power3.easeInOut, onUpdate: () => {
   //   fuzzy.pos = position;
   // }}, 0);
-  tl.fromTo(fuzzy, 8, {angle: Math.PI * -1}, {angle: Math.PI * 1, ease: Power1.easeInOut}, 0);
+  // tl.fromTo(fuzzy, 8, {angle: Math.PI * -1}, {angle: Math.PI * 1, ease: Power1.easeInOut}, 0);
 
 });
