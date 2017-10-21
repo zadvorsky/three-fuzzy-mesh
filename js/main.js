@@ -2,15 +2,16 @@
 function FuzzyMesh(params) {
   const config = this.config = {
     useNormals: true,
-    hairLength: 4,
+    hairLength: 6,
     hairRadialSegments: 4,
     hairHeightSegments: 16,
-    hairBase: 0.05,
-    minFlex: 0.8,
-    maxFlex: 1.2,
-    fuzz: 0.5,
-    gravity: 2.0,
-    centrifugalForceFactor: 2.0,
+    hairRadiusTop: 0.0,
+    hairRadiusBase: 0.1,
+    minFlex: 1.0,
+    maxFlex: 1.0,
+    fuzz: 0.0,
+    gravity: 1.0,
+    centrifugalForceFactor: 20.0,
     movementForceFactor: 0.75,
     movementDecay: 0.7,
     centrifugalDecay: 0.7,
@@ -19,13 +20,28 @@ function FuzzyMesh(params) {
   };
 
   const positions = params.model.vertices;
-  const prefab = new THREE.ConeGeometry(
-    config.hairBase,
-    config.hairLength,
-    config.hairRadialSegments,
-    config.hairHeightSegments,
-    true
-  );
+
+  let prefab;
+
+  if (config.hairRadiusTop === 0) {
+    prefab = new THREE.ConeGeometry(
+      config.hairBase,
+      config.hairRadiusBase,
+      config.hairRadialSegments,
+      config.hairHeightSegments,
+      true
+    );
+  }
+  else {
+    prefab = new THREE.CylinderGeometry(
+      config.hairRadiusTop,
+      config.hairRadiusBase,
+      config.hairLength,
+      config.hairRadialSegments,
+      config.hairHeightSegments,
+      false
+    );
+  }
 
   prefab.translate(0, config.hairLength * 0.5, 0);
 
@@ -96,7 +112,7 @@ function FuzzyMesh(params) {
       globalForce: {value: new THREE.Vector3(0.0, -config.gravity, 0.0)},
 
       centrifugalForce: {value: 0.0},
-      centrifugalAxis: {value: new THREE.Vector3()}
+      centrifugalDirection: {value: new THREE.Vector3(1, 0, 1)}
     },
     defines: {
       'HAIR_LENGTH': (config.hairLength).toFixed(2),
@@ -110,7 +126,7 @@ function FuzzyMesh(params) {
 
       uniform vec3 globalForce;
       uniform float centrifugalForce;
-      uniform vec3 centrifugalAxis;
+      uniform vec3 centrifugalDirection;
       uniform float settleTime;
       uniform float settleScale;
       
@@ -157,7 +173,7 @@ function FuzzyMesh(params) {
       // float frc = l / hairLength;
       // vec3 totalForce = globalForce * flex;
       // totalForce *= 0.95 + 0.05 - (sin(settleTime + settleOffset) * 0.05 * settleScale);
-      // totalForce += baseDirection * centrifugalAxis * centrifugalForce;
+      // totalForce += baseDirection * centrifugalDirection * centrifugalForce;
       // vec3 from = baseDirection;
       // vec3 to = normalize(baseDirection + totalForce * frc);
       // vec4 quat = quatFromUnitVectors(UP, to);
@@ -165,12 +181,11 @@ function FuzzyMesh(params) {
 
       vec3 totalForce = globalForce * flex;
       totalForce *= 0.95 + 0.05 - (sin(settleTime + settleOffset) * 0.05 * settleScale);
-      totalForce += baseDirection * centrifugalAxis * centrifugalForce;
+      totalForce += baseDirection * centrifugalDirection * centrifugalForce;
       
-
       vec3 result;
-
-      vec3 to = normalize(baseDirection + totalForce * position.y / HAIR_LENGTH);
+      float f = position.y / HAIR_LENGTH;
+      vec3 to = normalize(baseDirection + totalForce * f);
       vec4 q = quatFromUnitVectors(UP, to);
       vec3 v = vec3(position.x, 0.0, position.z);
 
@@ -178,8 +193,9 @@ function FuzzyMesh(params) {
 
       for (float i = 0.0; i < HAIR_LENGTH; i += SEGMENT_STEP) {
         if (position.y <= i) break;
-
-        vec3 to = normalize(baseDirection + totalForce * i * FORCE_STEP);
+        
+        float f = i * FORCE_STEP;
+        vec3 to = normalize(baseDirection + totalForce * f);
         vec4 q = quatFromUnitVectors(UP, to);
         vec3 v = vec3(0.0, SEGMENT_STEP, 0.0);
 
@@ -200,18 +216,18 @@ function FuzzyMesh(params) {
     params.model,
     new THREE.MeshStandardMaterial({
       roughness: 1.0,
-      // wireframe: true,
+      wireframe: true,
       // flatShading: true,
     })
   );
   this.add(base);
 
   // rotation stuff
+  this._quat = new THREE.Quaternion();
   this.conjugate = new THREE.Quaternion();
-  this.rotationAxis = new THREE.Vector3();
+  this.rotationAxis = new THREE.Vector3(0, 1, 0);
   this._angle = 0.0;
   this.previousAngle = this.angle;
-  this.setRotationAxis('y');
 
   // position stuff
   this.previousPosition = this.position.clone();
@@ -242,22 +258,26 @@ Object.defineProperty(FuzzyMesh.prototype, 'angle', {
   }
 });
 
-// todo: figure out which math we need to calculate centrifugal axis from rotation axis
 FuzzyMesh.prototype.setRotationAxis = function(axis) {
-  switch(axis) {
-    case 'x':
-      this.rotationAxis.set(1, 0, 0);
-      this.material.uniforms.centrifugalAxis.value.set(0, 1, 1);
-      break;
-    case 'y':
-      this.rotationAxis.set(0, 1, 0);
-      this.material.uniforms.centrifugalAxis.value.set(1, 0, 1);
-      break;
-    case 'z':
-      this.rotationAxis.set(0, 0, 1);
-      this.material.uniforms.centrifugalAxis.value.set(1, 1, 0);
-      break;
-  }
+  const ra = this.rotationAxis;
+  const cd = this.material.uniforms.centrifugalDirection.value;
+  const q = this._quat;
+
+  // reset rotation axis and centrifugal direction;
+  ra.set(0, 1, 0);
+  cd.set(1, 0, 1);
+
+  // get angle between default rotation axis and target rotation axis
+  q.setFromUnitVectors(ra, axis);
+  // apply angle to centrifugal direction
+  cd.applyQuaternion(q);
+  // normalize the angle, and make the values absolute
+  cd.normalize();
+  cd.x = Math.abs(cd.x);
+  cd.y = Math.abs(cd.y);
+  cd.z = Math.abs(cd.z);
+  // finally don't forget to update the rotation axis
+  ra.copy(axis);
 };
 
 FuzzyMesh.prototype.update = function() {
@@ -334,15 +354,11 @@ root.add(new THREE.AxisHelper(10));
 
 new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639/plus.json', (model) => {
   // test shapes, try different ones :D
-  // model = new THREE.SphereGeometry(4, 256, 128);
-  // model = new THREE.PlaneGeometry(16, 16, 2, 2);
+  // model = new THREE.SphereGeometry(4, 128, 64);
+  // model = new THREE.PlaneGeometry(4, 4, 4, 4);
   // model = new THREE.CylinderGeometry(2, 2, 8, 128, 64, true);
-  model = new THREE.TorusGeometry(8, 1, 128, 512);
+  // model = new THREE.TorusGeometry(8, 1, 128, 512);
   // model = new THREE.TorusKnotGeometry(2, 0.1, 64, 64, 3, 5);
-
-
-
-  // model.rotateX(Math.PI * -0.4);
 
 
 
@@ -362,7 +378,12 @@ new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639
 
   const fuzzy = new FuzzyMesh({
     model: model,
-    config: {}
+    config: {
+      hairLength: 2,
+      hairRadiusTop: 0.02,
+      hairRadiusBase: 0.02,
+      gravity: 1.0
+    }
   });
   root.add(fuzzy);
   root.addUpdateCallback(() => {
@@ -371,7 +392,11 @@ new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639
 
 
 
-  const axes = ['x', 'y', 'z'];
+  const axes = [
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(0, 1, 0),
+    new THREE.Vector3(0, 0, 1),
+  ];
   const p = new THREE.Vector3();
   const tl = new TimelineMax({
     repeat: -1,
@@ -379,28 +404,32 @@ new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639
     repeatDelay: 0.5,
     onRepeat: () => {
       fuzzy.angle = 0;
-    fuzzy.setRotationAxis(axes[Math.random() * 3 | 0]);
+
+      // const c = new THREE.Vector3();
+
+      // BAS.Utils.randomAxis(c);
+      // fuzzy.setRotationAxis(c);
+
+      // fuzzy.setRotationAxis(axes[Math.random() * 3 | 0]);
     },
     onUpdate: () => {
       fuzzy.pos = p;
     }
   });
 
-  tl.to(p, 0.5, {y: 16, ease: Power2.easeOut});
+  tl.to(p, 0.5, {y: 8, ease: Power2.easeOut});
   tl.to(p, 0.5, {y: 0, ease: Power2.easeIn});
-  tl.to(p, 0.1, {y: -4, ease: Power2.easeOut});
+  tl.to(p, 0.1, {y: -2, ease: Power2.easeOut});
   tl.to(p, 0.5, {y: 0, ease: Power2.easeOut});
   tl.fromTo(fuzzy, 1.0, {angle: 0}, {angle: Math.PI * 2 * (Math.random() > 0.5 ? 1 : -1), ease: Power1.easeInOut}, 0);
 
 
 
-
-  // fuzzy.setRotationAxis('x');
   // const position = new THREE.Vector3();
   // const tl = new TimelineMax({repeat: -1, yoyo: true, repeatDelay: 0});
   // tl.fromTo(position, 2, {x: -6}, {x: 6, ease: Power3.easeInOut, onUpdate: () => {
   //   fuzzy.pos = position;
   // }}, 0);
-  // tl.fromTo(fuzzy, 8, {angle: Math.PI * -1}, {angle: Math.PI * 1, ease: Power1.easeInOut}, 0);
+  // tl.fromTo(fuzzy, 2, {angle: Math.PI * -1}, {angle: Math.PI * 1, ease: Power4.easeInOut}, 0);
 
 });
