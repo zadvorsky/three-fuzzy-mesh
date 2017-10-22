@@ -5,17 +5,17 @@
  */
 function FuzzyMesh(params) {
   const config = this.config = {
-    hairLength: 6,
-    hairRadialSegments: 4,
+    hairLength: 1,
+    hairRadialSegments: 3,
     hairHeightSegments: 16,
     hairRadiusTop: 0.0,
     hairRadiusBase: 0.1,
-    minForceFactor: 2.0,
-    maxForceFactor: 2.0,
+    minForceFactor: 1.0,
+    maxForceFactor: 1.0,
     fuzz: 0.25,
     gravity: 1.0,
-    centrifugalForceFactor: 2,
-    centrifugalDecay: 0.5,
+    centrifugalForceFactor: 1,
+    centrifugalDecay: 0.8,
     movementForceFactor: 0.75,
     movementDecay: 0.7,
     settleDecay: 0.97, // should always be higher than movementDecay and centrifugal decay
@@ -179,7 +179,7 @@ function FuzzyMesh(params) {
       // add a little offset so the hairs don't all stop moving at the same time
       totalForce *= 1.0 + (sin(settleTime + settleOffset) * 0.05 * settleScale);
       // add force based on rotation
-      totalForce += baseDirection * centrifugalDirection * centrifugalForce * position.y;
+      totalForce += hairPosition * centrifugalDirection * centrifugalForce;
       // scale force based on a magic number!
       totalForce *= forceFactor;
       
@@ -359,6 +359,7 @@ new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639
       hairRadialSegments: 3,
       hairRadiusTop: 0.0,
       hairRadiusBase: 0.1,
+      centrifugalForceFactor: 4
     }
   });
   root.add(fuzzy);
@@ -382,7 +383,7 @@ new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639
   const tl = new TimelineMax({
     repeat: -1,
     delay: 1,
-    repeatDelay: 0.5,
+    repeatDelay: 1,
     onRepeat: () => {
       // const c = new THREE.Vector3();
       // BAS.Utils.randomAxis(c);
