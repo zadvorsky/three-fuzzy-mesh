@@ -177,7 +177,8 @@ function FuzzyMesh(params) {
       // accumulator for total force
       vec3 totalForce = globalForce;
       // add a little offset so the hairs don't all stop moving at the same time
-      totalForce *= 1.0 + (sin(settleTime + settleOffset) * 0.05 * settleScale);
+      // settleScale is increased when forces are applied, then gradually goes back to zero
+      totalForce *= 1.0 - (sin(settleTime + settleOffset) * 0.05 * settleScale);
       // add force based on rotation
       totalForce += hairPosition * centrifugalDirection * centrifugalForce;
       // scale force based on a magic number!
@@ -213,11 +214,11 @@ function FuzzyMesh(params) {
     `
   });
 
-  // console.log(material.defines)
-
   THREE.Mesh.call(this, geometry, material);
-
+  // since the bounding box for the hair is never updated,
+  // set frustumCulled to false so the object doesn't disappear suddenly
   this.frustumCulled = false;
+  // add the base geometry to self
   this.baseMesh = new THREE.Mesh(
     params.model,
     new THREE.MeshStandardMaterial(materialUniformValues)
@@ -355,8 +356,8 @@ new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639
     model: model,
     // directions: model.vertices,
     config: {
-      hairLength: 4,
-      hairRadialSegments: 3,
+      hairLength: 3,
+      hairRadialSegments: 4,
       hairRadiusTop: 0.0,
       hairRadiusBase: 0.1,
       centrifugalForceFactor: 4
