@@ -5,6 +5,7 @@
  */
 function FuzzyMesh(params) {
   const config = this.config = {
+    recursiveRotation: true,
     hairLength: 1,
     hairRadialSegments: 3,
     hairHeightSegments: 16,
@@ -23,11 +24,13 @@ function FuzzyMesh(params) {
   };
   const materialUniformValues = {
     metalness: 0.5,
-    roughness: 1.0,
+    roughness: 0.5,
     ...params.materialUniformValues
   };
-  const positions = params.model.vertices;
+  const positions = params.geometry.vertices;
 
+  // create a cone prefab for pointy hair
+  // create a cylinder prefab for non-pointy hair
   let prefab;
 
   if (config.hairRadiusTop === 0) {
@@ -49,18 +52,23 @@ function FuzzyMesh(params) {
       false
     );
   }
-
+  // cone and cylinder geometries are created around the center
+  // translate them so the vertices start at y=0 and move up
   prefab.translate(0, config.hairLength * 0.5, 0);
 
+  // create a geometry with 1 prefab per vertex of the supplied geometry
   const geometry = new BAS.PrefabBufferGeometry(prefab, positions.length);
+
   // forceFactor is a scalar that multiplies the total force affecting the vertex
   geometry.createAttribute('forceFactor', 1, (data) => {
     data[0] = THREE.Math.randFloat(config.minForceFactor, config.maxForceFactor);
   });
+
   // settleOffset is used to make sure the hair don't stop moving at the same time
   geometry.createAttribute('settleOffset', 1, (data) => {
     data[0] = THREE.Math.randFloat(0, Math.PI * 2);
   });
+
   // hair positions based on model vertices
   geometry.createAttribute('hairPosition', 3, (data, i) => {
     positions[i].toArray(data);
@@ -76,18 +84,21 @@ function FuzzyMesh(params) {
   else {
     directions = [];
 
-    params.model.computeVertexNormals();
+    params.geometry.computeVertexNormals();
 
-    for (let i = 0; i < params.model.faces.length; i++) {
-      const face = params.model.faces[i];
+    // get a flat array of vertex normals
+    for (let i = 0; i < params.geometry.faces.length; i++) {
+      const face = params.geometry.faces[i];
 
       directions[face.a] = face.vertexNormals[0];
       directions[face.b] = face.vertexNormals[1];
       directions[face.c] = face.vertexNormals[2];
     }
   }
+
   // base hair directions (which direction the hair goes with no force applied to it)
   const direction = new THREE.Vector3();
+
   geometry.createAttribute('baseDirection', 3, (data, i) => {
     direction.copy(directions[i]);
     direction.x += THREE.Math.randFloatSpread(config.fuzz);
@@ -96,6 +107,62 @@ function FuzzyMesh(params) {
     direction.normalize();
     direction.toArray(data);
   });
+
+  const simpleShader = `
+    float f = position.y / HAIR_LENGTH;
+    
+    vec3 totalForce = globalForce;
+    
+    totalForce *= 1.0 - (sin(settleTime + settleOffset) * 0.05 * settleScale);
+    totalForce += hairPosition * centrifugalDirection * centrifugalForce;
+    totalForce *= forceFactor;
+    
+    vec3 to = normalize(baseDirection + totalForce * f);
+    vec4 quat = quatFromUnitVectors(UP, to);
+    
+    transformed = rotateVector(quat, transformed) + hairPosition;
+  `;
+
+  const recursiveShader = `
+    // accumulator for total force
+    vec3 totalForce = globalForce;
+    // add a little offset so the hairs don't all stop moving at the same time
+    // settleScale is increased when forces are applied, then gradually goes back to zero
+    totalForce *= 1.0 - (sin(settleTime + settleOffset) * 0.05 * settleScale);
+    // add force based on rotation
+    totalForce += hairPosition * centrifugalDirection * centrifugalForce;
+    // scale force based on a magic number!
+    totalForce *= forceFactor;
+    
+    // accumulator for position
+    vec3 finalPosition;
+    // get height fraction between 0.0 and 1.0
+    float f = position.y / HAIR_LENGTH;
+    // determine target position based on force and height fraction
+    vec3 to = normalize(baseDirection + totalForce * f);
+    // calculate quaterion needed to rotate UP to target rotation
+    vec4 q = quatFromUnitVectors(UP, to);
+    // only apply this rotation to position x and z
+    // position y will be calculated in the loop below
+    vec3 v = vec3(position.x, 0.0, position.z);
+  
+    finalPosition += rotateVector(q, v);
+    
+    // recursively calculate rotations using the same approach as above
+    for (float i = 0.0; i < HAIR_LENGTH; i += SEGMENT_STEP) {
+      if (position.y <= i) break;
+  
+      float f = i * FORCE_STEP;
+      vec3 to = normalize(baseDirection + totalForce * f);
+      vec4 q = quatFromUnitVectors(UP, to);
+      // apply this rotation to a 'segment'
+      vec3 v = vec3(0.0, SEGMENT_STEP, 0.0);
+      // all segments leading up to the Y position are added to the final position
+      finalPosition += rotateVector(q, v);
+    }
+  
+    transformed = finalPosition + hairPosition;
+  `;
 
   const material = new BAS.StandardAnimationMaterial({
     flatShading: true,
@@ -163,64 +230,17 @@ function FuzzyMesh(params) {
       }
       `
     ],
-    vertexPosition: `
-      // float l = position.y;
-      // float frc = l / HAIR_LENGTH;
-      // vec3 totalForce = globalForce * forceFactor;
-      // totalForce *= 0.95 + 0.05 - (sin(settleTime + settleOffset) * 0.05 * settleScale);
-      // totalForce += baseDirection * l * centrifugalDirection * centrifugalForce;
-      // vec3 from = baseDirection;
-      // vec3 to = normalize(baseDirection + totalForce * frc);
-      // vec4 quat = quatFromUnitVectors(UP, to);
-      // transformed = rotateVector(quat, transformed) + hairPosition;
-      
-      // accumulator for total force
-      vec3 totalForce = globalForce;
-      // add a little offset so the hairs don't all stop moving at the same time
-      // settleScale is increased when forces are applied, then gradually goes back to zero
-      totalForce *= 1.0 - (sin(settleTime + settleOffset) * 0.05 * settleScale);
-      // add force based on rotation
-      totalForce += hairPosition * centrifugalDirection * centrifugalForce;
-      // scale force based on a magic number!
-      totalForce *= forceFactor;
-      
-      // accumulator for position
-      vec3 finalPosition;
-      // get height fraction between 0.0 and 1.0
-      float f = position.y / HAIR_LENGTH;
-      // determine target position based on force and height fraction
-      vec3 to = normalize(baseDirection + totalForce * f);
-      // calculate quaterion needed to rotate UP to target rotation
-      vec4 q = quatFromUnitVectors(UP, to);
-      // only apply this rotation to position x and z
-      // position y will be calculated in the loop below
-      vec3 v = vec3(position.x, 0.0, position.z);
-
-      finalPosition += rotateVector(q, v);
-      
-      // recursively calculate rotations using the same approach as above
-      for (float i = 0.0; i < HAIR_LENGTH; i += SEGMENT_STEP) {
-        if (position.y <= i) break;
-
-        float f = i * FORCE_STEP;
-        vec3 to = normalize(baseDirection + totalForce * f);
-        vec4 q = quatFromUnitVectors(UP, to);
-        vec3 v = vec3(0.0, SEGMENT_STEP, 0.0);
-
-        finalPosition += rotateVector(q, v);
-      }
-
-      transformed = finalPosition + hairPosition;
-    `
+    vertexPosition: config.recursiveRotation ? recursiveShader : simpleShader
   });
 
   THREE.Mesh.call(this, geometry, material);
+
   // since the bounding box for the hair is never updated,
   // set frustumCulled to false so the object doesn't disappear suddenly
   this.frustumCulled = false;
   // add the base geometry to self
   this.baseMesh = new THREE.Mesh(
-    params.model,
+    params.geometry,
     new THREE.MeshStandardMaterial(materialUniformValues)
   );
   this.add(this.baseMesh);
@@ -325,14 +345,13 @@ const colors = {
 const root = new THREERoot({
   createCameraControls: true,
   zNear: 0.01,
-  zFar: 1000
+  zFar: 1000,
+  antialias: true,
 });
 
 root.renderer.shadowMap.enabled = true;
 root.renderer.setClearColor(colors.darkPurple);
 root.camera.position.set(-10, 0, 20);
-// root.controls.target.set(0, 3, 0);
-// root.controls.autoRotate = true;
 
 const light = new THREE.DirectionalLight(colors.turquoise);
 light.position.set(0.125, 1, 0);
@@ -344,30 +363,31 @@ root.add(light2);
 
 root.add(new THREE.AmbientLight(colors.purple));
 
-new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639/plus.json', (model) => {
+new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639/plus.json', (geometry) => {
   // test shapes, try different ones :D
   // model = new THREE.SphereGeometry(1, 16, 16);
-  // model = new THREE.PlaneGeometry(4, 4, 40, 40);
+  // model = new THREE.PlaneGeometry(40, 10, 200, 40);
   // model = new THREE.CylinderGeometry(2, 2, 8, 128, 64, true);
-  // model = new THREE.TorusGeometry(8, 1, 128, 512);
+  // model = new THREE.TorusGeometry(8, 1, 128, 256);
   // model = new THREE.TorusKnotGeometry(2, 0.1, 64, 64, 3, 5);
 
   const fuzzy = new FuzzyMesh({
-    model: model,
+    geometry: geometry,
     // directions: model.vertices,
     config: {
-      hairLength: 3,
+      hairLength: 2,
       hairRadialSegments: 4,
       hairRadiusTop: 0.0,
       hairRadiusBase: 0.1,
-      centrifugalForceFactor: 4
+    },
+    materialUniformValues: {
+      roughness: 1.0
     }
   });
   root.add(fuzzy);
   root.addUpdateCallback(() => {
     fuzzy.update();
   });
-
 
   const axes = [
     new THREE.Vector3(1, 0, 0),
@@ -380,17 +400,13 @@ new THREE.JSONLoader().load('https://s3-us-west-2.amazonaws.com/s.cdpn.io/304639
     angle: 0,
   };
 
-  const p = new THREE.Vector3();
   const tl = new TimelineMax({
     repeat: -1,
     delay: 1,
     repeatDelay: 1,
     onRepeat: () => {
-      // const c = new THREE.Vector3();
-      // BAS.Utils.randomAxis(c);
-      // fuzzy.setRotationAxis(c);
-
-      fuzzy.setRotationAxis(axes[Math.random() * 3 | 0]);
+      fuzzy.setRotationAxis(BAS.Utils.randomAxis());
+      // fuzzy.setRotationAxis(axes[Math.random() * 3 | 0]);
     },
     onUpdate: () => {
       fuzzy.setPosition(proxy.position);
