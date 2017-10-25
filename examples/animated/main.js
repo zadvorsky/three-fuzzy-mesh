@@ -11,7 +11,7 @@ const root = new THREERoot({
   createCameraControls: true,
   zNear: 0.01,
   zFar: 1000,
-  antialias: true,
+  antialias: true
 });
 
 root.renderer.shadowMap.enabled = true;

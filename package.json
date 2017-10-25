@@ -2,14 +2,13 @@
   "name": "fuzzy_geometries",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "live-server --watch=src,examples"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "gsap": "^1.20.3",
     "three": "^0.87.1",
     "three-bas": "^2.2.0"
   }

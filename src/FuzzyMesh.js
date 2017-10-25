@@ -1,5 +1,5 @@
 /**
- *
+ * Create a fuzzy mesh!
  * @param params
  * @constructor
  */
