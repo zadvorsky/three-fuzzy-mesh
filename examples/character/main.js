@@ -1,13 +1,5 @@
-const colors = {
-  turquoise: 0x47debd,
-  darkPurple: 0x2e044e,
-  purple: 0x7821ec,
-  yellow: 0xfff95d,
-  white: 0xffffff,
-  black: 0x000000
-};
 
-// hero class
+// hero class, based on work by Karim Maaloul
 
 function Hero() {
   this.runningCycle = 0;
@@ -16,128 +8,134 @@ function Hero() {
   this.mesh.add(this.body);
 
 
-  this.torso = new FuzzyMesh({
-    geometry: new THREE.SphereGeometry(4, 48, 32),
-    materialUniformValues: {
-      roughness: 1.0
-    },
-    config: {
-      hairLength: 4,
-      hairRadiusBase: 0.25,
-      gravity: 2,
-      fuzz: 0.25,
-      minForceFactor: 0.5,
-      maxForceFactor: 2.0,
-      centrifugalForceFactor: 4,
-    }
-  });
-  this.torso.position.y = 8;
-  this.body.add(this.torso);
-
-
-  this.handR = new FuzzyMesh({
-    geometry: new THREE.SphereGeometry(1, 32, 32),
-    materialUniformValues: {
-      roughness: 1.0
-    },
-    config: {
-      hairLength: 2,
-      hairRadiusBase: 0.25,
-      gravity: 2,
-      fuzz: 0.25,
-      minForceFactor: 0.5,
-      maxForceFactor: 2.0
-    }
-  });
-  this.handR.position.z = 7;
-  this.handR.position.y = 8;
-  this.handR.setRotationAxis(new THREE.Vector3(0, 0, 1));
-  this.body.add(this.handR);
-
-
-  this.handL = new FuzzyMesh({
-    geometry: new THREE.SphereGeometry(1, 32, 32),
-    materialUniformValues: {
-      roughness: 1.0
-    },
-    config: {
-      hairLength: 2,
-      hairRadiusBase: 0.25,
-      gravity: 2,
-      fuzz: 0.25,
-      minForceFactor: 0.5,
-      maxForceFactor: 2.0
-    }
-  });
-  this.handL.position.y = 8;
-  this.handL.position.z = - this.handR.position.z;
-  this.handL.setRotationAxis(new THREE.Vector3(0, 0, 1));
-  this.body.add(this.handL);
-
-
   this.head = new FuzzyMesh({
-    geometry: new THREE.SphereGeometry(4, 48, 32),
+    geometry: new THREE.SphereGeometry(4, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.55),
     materialUniformValues: {
       roughness: 1.0
     },
     config: {
-      hairLength: 4,
-      hairRadiusBase: 0.25,
+      hairLength: 6,
+      hairRadiusBase: 0.5,
+      hairRadialSegments: 6,
       gravity: 2,
       fuzz: 0.25,
       minForceFactor: 0.5,
-      maxForceFactor: 2.0
+      maxForceFactor: 0.75
     }
   });
-
-  this.head.position.y = 21;
+  this.head.position.y = this.headAnchorY = 13;
   this.head.castShadow = true;
   this.head.setRotationAxis(new THREE.Vector3(1, 0, 0));
   this.body.add(this.head);
 
 
+  this.torso = new FuzzyMesh({
+    geometry: new THREE.SphereGeometry(3, 32, 16, 0, Math.PI * 2, Math.PI * 0.25, Math.PI * 0.70),
+    materialUniformValues: {
+      roughness: 1.0
+    },
+    config: {
+      hairLength: 5,
+      hairRadiusBase: 0.5,
+      hairRadialSegments: 6,
+      gravity: 2,
+      fuzz: 0.5,
+      minForceFactor: 1.0,
+      maxForceFactor: 4.0,
+      centrifugalForceFactor: 4,
+    }
+  });
+  this.torso.position.y = this.torsoAnchorY = 9;
+  this.body.add(this.torso);
+
+
+  this.handR = new FuzzyMesh({
+    geometry: new THREE.SphereGeometry(1, 12, 12),
+    materialUniformValues: {
+      roughness: 1.0
+    },
+    config: {
+      hairLength: 2,
+      hairRadiusBase: 0.25,
+      hairRadialSegments: 6,
+      gravity: 2,
+      fuzz: 0.25,
+    }
+  });
+  this.handR.position.y = this.handAnchorY = 8;
+  this.handR.position.z = this.handAnchorZ = 6;
+  this.handR.setRotationAxis(new THREE.Vector3(0, 0, 1));
+  this.body.add(this.handR);
+
+
+  this.handL = new FuzzyMesh({
+    geometry: new THREE.SphereGeometry(1, 12, 12),
+    materialUniformValues: {
+      roughness: 1.0
+    },
+    config: {
+      hairLength: 2,
+      hairRadiusBase: 0.25,
+      hairRadialSegments: 6,
+      gravity: 2,
+      fuzz: 0.25,
+    }
+  });
+  this.handL.position.y = this.handAnchorY;
+  this.handL.position.z = -this.handAnchorZ;
+  this.handL.setRotationAxis(new THREE.Vector3(0, 0, 1));
+  this.body.add(this.handL);
+
+
   this.legR = new FuzzyMesh({
-    geometry: new THREE.SphereGeometry(3, 48, 16, 0, Math.PI * 2, 0, Math.PI * 0.5),
+    geometry: new THREE.SphereGeometry(2, 48, 16, 0, Math.PI * 2, 0, Math.PI * 0.5),
     materialUniformValues: {
       roughness: 1.0,
       side: THREE.DoubleSide
     },
     config: {
       hairLength: 2,
-      hairRadiusBase: 0.25,
-      gravity: 2,
+      hairRadiusBase: 0.5,
+      hairRadialSegments: 6,
+      gravity: 1,
       fuzz: 0.25,
-      minForceFactor: 0.5,
-      maxForceFactor: 2.0
     }
   });
-  this.legR.position.z = 6;
+  this.legR.position.z = this.legAnchorZ = 3;
   this.legR.setRotationAxis(new THREE.Vector3(0, 0, 1));
   this.body.add(this.legR);
 
 
   this.legL = new FuzzyMesh({
-    geometry: new THREE.SphereGeometry(3, 48, 16, 0, Math.PI * 2, 0, Math.PI * 0.5),
+    geometry: new THREE.SphereGeometry(2, 48, 16, 0, Math.PI * 2, 0, Math.PI * 0.5),
     materialUniformValues: {
       roughness: 1.0,
       side: THREE.DoubleSide
     },
     config: {
       hairLength: 2,
-      hairRadiusBase: 0.25,
-      gravity: 2,
+      hairRadiusBase: 0.5,
+      hairRadialSegments: 6,
+      gravity: 1,
       fuzz: 0.25,
-      minForceFactor: 0.5,
-      maxForceFactor: 2.0
     }
   });
-  this.legL.position.z = -6;
+  this.legL.position.z = -this.legAnchorZ;
   this.legL.setRotationAxis(new THREE.Vector3(0, 0, 1));
   this.body.add(this.legL);
-};
+
+
+  const color = new THREE.Color().setHSL(Math.random(), 0.75, 0.5);
+  this.head.setColor(color);
+  this.torso.setColor(color);
+  this.handR.setColor(color);
+  this.handL.setColor(color);
+  this.legR.setColor(color);
+  this.legL.setColor(color);
+}
 
 Hero.prototype.run = function(){
-  var s = 0.1;
+  var s = 0.125;
   var t = this.runningCycle;
   var amp = 4;
 
@@ -145,18 +143,18 @@ Hero.prototype.run = function(){
 
   this.runningCycle += s;
 
-  this.torso.setPosition(new THREE.Vector3(
-    this.torso.position.x,
-    8 - Math.cos(  t * 2 ) * amp * .2,
-    this.torso.position.z
-  ));
-
   this.head.setPosition(new THREE.Vector3(
     this.head.position.x,
-    16 - Math.cos(  t * 2 ) * amp * .3,
+    this.headAnchorY - Math.cos(  t * 2 ) * amp * .3,
     this.head.position.z
   ));
+  this.head.setRotationAngle(Math.cos(t) * amp * .02);
 
+  this.torso.setPosition(new THREE.Vector3(
+    this.torso.position.x,
+    this.torsoAnchorY - Math.cos(  t * 2 ) * amp * .2,
+    this.torso.position.z
+  ));
   this.torso.setRotationAngle(-Math.cos( t + Math.PI ) * amp * .05);
 
   this.handR.setPosition(new THREE.Vector3(
@@ -173,19 +171,16 @@ Hero.prototype.run = function(){
   ));
   this.handL.setRotationAngle(-Math.cos(t + Math.PI) * Math.PI / 8);
 
-  this.head.setRotationAngle(Math.cos(t) * amp * .02);
-  // this.head.rotation.y =  Math.cos( t ) * amp * .01;
-
   this.legR.setPosition(new THREE.Vector3(
     Math.cos(t) * amp,
     Math.max(0, -Math.sin(t) * amp),
-    6
+    this.legAnchorZ
   ));
 
   this.legL.setPosition(new THREE.Vector3(
     Math.cos(t + Math.PI) * amp,
     Math.max(0, -Math.sin(t + Math.PI) * amp),
-    -6
+    -this.legAnchorZ
   ));
 
   if (t > Math.PI){
@@ -214,20 +209,21 @@ const root = new THREERoot({
   antialias: true
 });
 
-root.renderer.shadowMap.enabled = true;
 root.renderer.setClearColor(0xf1f1f1);
+root.controls.autoRotate = true;
+root.controls.autoRotateSpeed = -6;
 root.camera.position.set(30, 10, 30);
+root.scene.fog = new THREE.FogExp2(0xf1f1f1, 0.01);
 
-const light = new THREE.DirectionalLight(0xffffff, 0.5);
+const light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(0, 1, 0);
 root.add(light);
 
-const light2 = new THREE.DirectionalLight(0xffffff, 0.5);
+const light2 = new THREE.DirectionalLight(0xffffff, 1);
 light2.position.set(0, -1, 0);
 root.add(light2);
 
-// root.add(new THREE.AmbientLight(colors.purple));
-// root.add(new THREE.AxisHelper(40));
+root.add(new THREE.AmbientLight(0xaaaaaa));
 
 const hero = new Hero();
 hero.mesh.position.y = -8;
@@ -236,3 +232,14 @@ root.add(hero.mesh);
 root.addUpdateCallback(() => {
   hero.run();
 });
+
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(400, 400),
+  new THREE.MeshBasicMaterial({
+    color: 0xcccccc
+  })
+);
+floor.position.y = -8;
+floor.rotation.x = -Math.PI * 0.5;
+root.add(floor);
+

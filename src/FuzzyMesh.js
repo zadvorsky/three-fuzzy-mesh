@@ -261,6 +261,11 @@ function FuzzyMesh(params) {
 FuzzyMesh.prototype = Object.create(THREE.Mesh.prototype);
 FuzzyMesh.prototype.constructor = FuzzyMesh;
 
+FuzzyMesh.prototype.setColor = function(color) {
+  this.baseMesh.material.color.set(color);
+  this.material.uniforms.diffuse.value.set(color);
+};
+
 FuzzyMesh.prototype.setPosition = function(position) {
   this.previousPosition.copy(this.position);
   this.position.copy(position);
