@@ -135,7 +135,7 @@ function FuzzyMesh(params) {
     totalForce *= forceFactor;
     
     // accumulator for position
-    vec3 finalPosition;
+    vec3 finalPosition = vec3(0.0, 0.0, 0.0);
     // get height fraction between 0.0 and 1.0
     float f = position.y / HAIR_LENGTH;
     // determine target position based on force and height fraction
@@ -205,7 +205,7 @@ function FuzzyMesh(params) {
       // based on THREE.Quaternion.setFromUnitVectors
       // would be great if we can get rid of the conditionals
       vec4 quatFromUnitVectors(vec3 from, vec3 to) {
-        vec3 v;
+        vec3 v = vec3(0.0, 0.0, 0.0);
         float r = dot(from, to) + 1.0;
         
         if (r < 0.00001) {
