@@ -132,6 +132,8 @@ function Hero() {
   this.handL.setColor(color);
   this.legR.setColor(color);
   this.legL.setColor(color);
+
+  this.tempV = new THREE.Vector3();
 }
 
 Hero.prototype.run = function(){
@@ -143,41 +145,41 @@ Hero.prototype.run = function(){
 
   this.runningCycle += s;
 
-  this.head.setPosition(new THREE.Vector3(
+  this.head.setPosition(this.tempV.set(
     this.head.position.x,
     this.headAnchorY - Math.cos(  t * 2 ) * amp * .3,
     this.head.position.z
   ));
   this.head.setRotationAngle(Math.cos(t) * amp * .02);
 
-  this.torso.setPosition(new THREE.Vector3(
+  this.torso.setPosition(this.tempV.set(
     this.torso.position.x,
     this.torsoAnchorY - Math.cos(  t * 2 ) * amp * .2,
     this.torso.position.z
   ));
   this.torso.setRotationAngle(-Math.cos( t + Math.PI ) * amp * .05);
 
-  this.handR.setPosition(new THREE.Vector3(
+  this.handR.setPosition(this.tempV.set(
     -Math.cos( t ) * amp,
     this.handR.position.y,
     this.handR.position.z
   ));
   this.handR.setRotationAngle(-Math.cos(t) * Math.PI / 8);
 
-  this.handL.setPosition(new THREE.Vector3(
+  this.handL.setPosition(this.tempV.set(
     -Math.cos( t + Math.PI) * amp,
     this.handL.position.y,
     this.handL.position.z
   ));
   this.handL.setRotationAngle(-Math.cos(t + Math.PI) * Math.PI / 8);
 
-  this.legR.setPosition(new THREE.Vector3(
+  this.legR.setPosition(this.tempV.set(
     Math.cos(t) * amp,
     Math.max(0, -Math.sin(t) * amp),
     this.legAnchorZ
   ));
 
-  this.legL.setPosition(new THREE.Vector3(
+  this.legL.setPosition(this.tempV.set(
     Math.cos(t + Math.PI) * amp,
     Math.max(0, -Math.sin(t + Math.PI) * amp),
     -this.legAnchorZ
