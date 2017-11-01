@@ -1,10 +1,5 @@
-// THREE.ShapeUtils.triangulateShape = (function() {
-//   var pnlTriangulator = new PNLTRI.Triangulator();
-//   return function triangulateShape(contour, holes) {
-//     return pnlTriangulator.triangulate_polygon([contour].concat(holes));
-//   };
-// })();
 
+// set the correct triangulate function for generating text geometries
 
 THREE.ShapeUtils.triangulateShape = function ( contour, holes ) {
   function removeDupEndPts( points ) {
@@ -38,7 +33,6 @@ THREE.ShapeUtils.triangulateShape = function ( contour, holes ) {
   return grouped;
 };
 
-
 // scene stuff
 
 const root = new THREERoot({
@@ -54,26 +48,15 @@ root.renderer.setClearColor(0x000000);
 root.camera.position.set(0, 0, 60);
 root.scene.fog = new THREE.FogExp2(0xf1f1f1, 0.001);
 
-const light = new THREE.DirectionalLight(0xffffff, 4);
-light.position.set(0, 1, 1);
+const light = new THREE.DirectionalLight(0xffffff, 0.75);
+light.position.set(1, 1, 1);
 root.add(light);
 
-const light2 = new THREE.DirectionalLight(0xffffff, 4);
-light2.position.set(0, 1, -1);
+const light2 = new THREE.DirectionalLight(0xffffff, 0.75);
+light2.position.set(-1, 1, 1);
 root.add(light2);
 
-// root.add(new THREE.AmbientLight(0xaaaaaa));
-
-// const floor = new THREE.Mesh(
-//   new THREE.PlaneGeometry(400, 400),
-//   new THREE.MeshBasicMaterial({
-//     color: 0xcccccc
-//   })
-// );
-// floor.position.y = -8;
-// floor.rotation.x = -Math.PI * 0.5;
-// root.add(floor);
-
+// root.add(new THREE.AmbientLight(0x888888));
 
 // text stuff
 const string = 'CODEVEMBER';
@@ -107,7 +90,7 @@ new THREE.FontLoader().load(fontUrl, (font) => {
     mesh.position.x = offsetX;
     offsetX += mesh.userData.ha;
 
-    mesh.setColor(new THREE.Color().setHSL(i / letterMeshes.length, 0.75, 0.5));
+    mesh.setColor(new THREE.Color().setHSL(i / letterMeshes.length, 1.0, 0.5));
   });
 
   const bounds = new THREE.Box3();
@@ -124,7 +107,7 @@ new THREE.FontLoader().load(fontUrl, (font) => {
   root.addUpdateCallback(() => {
     letterGroup.children.forEach((child, i) => {
       v.copy(child.position);
-      v.y = (Math.sin(t + i * 0.5)) * 4;
+      v.y = (Math.sin((t + i) * 1.2)) * 5;
 
       child.setPosition(v);
       child.update();
@@ -140,41 +123,36 @@ function createLetterMesh(char, font) {
     ...fontParams
   });
 
-  // const modifier = new THREE.SubdivisionModifier(2);
-  // modifier.modify(geometry);
+  // geometry.center();
 
   const modifier = new THREE.TessellateModifier(1);
   for (let i = 0; i < 6; i++) {
     modifier.modify(geometry);
   }
 
-  // const material = new THREE.MeshStandardMaterial({
-  //   color: 0xff00ff,
-  //   wireframe: true
-  // });
-  // const mesh = new THREE.Mesh(geometry, material);
-
-
   const mesh = new FuzzyMesh({
     geometry,
     config: {
-      hairLength: 4,
-      hairRadiusBase: 0.25,
+      hairLength: 3,
+      hairRadiusBase: 0.20,
+      hairRadiusTop: 0.20,
       hairRadialSegments: 4,
       fuzz: 2,
-      gravity: 6,
-      minForceFactor: 1.0,
-      maxForceFactor: 2.0,
-      movementForceFactor: 2.0
+      gravity: 4,
+      minForceFactor: 0.5,
+      maxForceFactor: 1.0,
+      movementForceFactor: 0.9
     },
     materialUniformValues: {
-      roughness: 1.0
+      roughness: 0.4,
+      metalness: 0.1
     }
   });
 
   const scale = fontParams.size / font.data.resolution;
   const glyph = font.data.glyphs[char];
 
+  // todo: this doesn't feel like the correct way to calculate letter spacing
   mesh.userData.ha = glyph.ha * scale + fontParams.letterSpacing * scale;
 
   return mesh;
