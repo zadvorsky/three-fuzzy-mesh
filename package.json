@@ -4,12 +4,15 @@
   "description": "",
   "main": "",
   "scripts": {
-    "dev": "live-server --watch=src,examples"
+    "dev": "./bin/node_modules/live-server --watch=src,examples"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "three": "^0.87.1",
     "three-bas": "^2.2.0"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.0",
   }
 }
